@@ -1,0 +1,55 @@
+FROM stereolabs/zed:3.7-gl-devel-cuda11.4-ubuntu18.04
+
+# Actualizar CUDA
+RUN rm /etc/apt/sources.list.d/cuda.list
+RUN apt-key del 7fa2af80
+RUN apt-get update && apt-get install -y --no-install-recommends wget
+RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-keyring_1.0-1_all.deb
+RUN dpkg -i cuda-keyring_1.0-1_all.deb
+RUN apt update && apt install -y locales curl gnupg2 lsb-release && \
+    curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+
+# Instalar ROS Eloquent
+RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu bionic main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+RUN apt update && apt install -y ros-eloquent-desktop ros-eloquent-ros-base python3-rosdep
+
+# Instalando una dependencia necesaria para conectarse a la camara por USB
+RUN apt install -y libusb-1.0-0-dev
+
+# Actualizando CMAKE para poder compilar sin problemas
+RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - |  sudo tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+RUN sudo sh -c 'echo "deb https://apt.kitware.com/ubuntu/ bionic main" > /etc/apt/sources.list.d/cmake-latest.list'
+RUN apt update && apt upgrade -y cmake
+
+# Se descarga zed-ros2-wrapper
+RUN mkdir -p /usr/local/zed/ros2ws/src && cd /usr/local/zed/ros2ws/src && wget https://github.com/stereolabs/zed-ros2-wrapper/archive/refs/heads/eloquent.zip && unzip eloquent.zip && rm eloquent.zip
+
+# Se descarga colcon, para compilar e instalar los paquetes de zed
+RUN apt install -y python3-colcon-common-extensions
+
+# Se descarga zed-ros2-examples. La variable REP_VERSION indica que rama o commit usar
+ENV REP_VERSION f43e4cee4da898d6ffe0455deffadd02f20a3a34
+RUN cd /usr/local/zed/ros2ws/src && wget https://github.com/stereolabs/zed-ros2-examples/archive/${REP_VERSION}.zip && unzip ${REP_VERSION}.zip && rm ${REP_VERSION}.zip
+
+RUN rosdep init && rosdep update  --include-eol-distros
+ENV ROS_DISTRO eloquent
+
+# Se instalan los paquetes
+RUN cd ros2ws && rosdep install --from-paths src --ignore-src -r -y
+
+# Se alistan los scripts para que cuando se ejecute el contenedor de Docker encuentre ros activo
+RUN echo source /opt/ros/eloquent/setup.bash >> ~/.bashrc
+RUN echo source /usr/local/zed/ros2ws/install/local_setup.sh >> ~/.bashrc
+RUN echo "#!/bin/bash \n source ~/.bashrc \n source /usr/local/zed/ros2ws/install/local_setup.sh \n ros2 launch zed_wrapper zed2.launch.py" >> /usr/bin/run_zednode && chmod +x /usr/bin/run_zednode
+RUN rm -Rf /usr/local/zed/ros2ws/src/zed-ros2-examples-${REP_VERSION}/tutorials/zed_rgb_convert/
+RUN apt install -y ros-eloquent-image-transport*
+RUN echo 'source /opt/ros/eloquent/setup.bash && source /root/.bashrc &&  cd /usr/local/zed/ros2ws/ && colcon build --symlink-install --cmake-args="-DCMAKE_BUILD_TYPE=Release -Wall -Wextra -Wpedantic " || colcon build --symlink-install --cmake-args="-DCMAKE_BUILD_TYPE=Release -Wall -Wextra -Wpedantic "' >> /usr/bin/compile.sh && chmod +x /usr/bin/compile.sh
+
+# Se modifica el ejemplo de rviz2 para no correr el nodo
+# en https://github.com/stereolabs/zed-ros2-examples/blob/master/zed_display_rviz2/launch/display_zed2i.launch.py#L18 esta esta variable
+RUN cd /usr/local/zed/ros2ws/src/zed-ros2-examples-${REP_VERSION}/zed_display_rviz2/launch/ && sed 's/start_zed_node = True/start_zed_node = False/g' display_zed2.launch.py > display_zed2.launch_new.py && mv display_zed2.launch_new.py display_zed2.launch.py
+RUN cd /usr/local/zed/ros2ws/src/zed-ros2-examples-${REP_VERSION}/zed_display_rviz2/launch/ && sed 's/namespace=camera_name,/# namespace=camera_name,/g' display_zed2.launch.py > display_zed2.launch_new.py && mv display_zed2.launch_new.py display_zed2.launch.py
+RUN cd /usr/local/zed/ros2ws/src/zed-ros2-examples-${REP_VERSION}/zed_display_rviz2/launch/ && sed "s/executable='rviz2',/node_executable='rviz2',/g" display_zed2.launch.py > display_zed2.launch_new.py && mv display_zed2.launch_new.py display_zed2.launch.py
+
+WORKDIR /usr/local/zed/ros2ws
+SHELL ["/bin/bash", "-c"]
