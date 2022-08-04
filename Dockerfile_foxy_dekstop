@@ -1,0 +1,60 @@
+FROM stereolabs/zed:3.7-gl-devel-cuda11.4-ubuntu20.04
+
+# Actualizar CUDA
+RUN rm /etc/apt/sources.list.d/cuda.list
+RUN apt-key del 7fa2af80
+RUN apt-get update && apt-get install -y --no-install-recommends wget
+RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-keyring_1.0-1_all.deb
+RUN dpkg -i cuda-keyring_1.0-1_all.deb
+RUN apt update && apt install -y locales curl gnupg2 lsb-release && \
+	apt install -y software-properties-common && add-apt-repository universe && \
+	apt update && apt install -y curl gnupg lsb-release
+
+# Instalar ROS foxy
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu focal main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+RUN apt update && apt upgrade -y 
+RUN DEBIAN_FRONTEND=noninteractive apt install -y ros-foxy-desktop
+
+# Instalando una dependencia necesaria para conectarse a la camara por USB
+RUN apt install -y libusb-1.0-0-dev
+
+# Actualizando CMAKE para poder compilar sin problemas
+RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - |  sudo tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+RUN sudo sh -c 'echo "deb https://apt.kitware.com/ubuntu/ bionic main" > /etc/apt/sources.list.d/cmake-latest.list'
+RUN apt update && apt upgrade -y cmake
+
+# Se descarga zed-ros2-wrapper y su dependencia zed-ros2-interfaces
+RUN mkdir -p /usr/local/zed/ros2ws/src && cd /usr/local/zed/ros2ws/src && wget https://github.com/stereolabs/zed-ros2-wrapper/archive/refs/heads/master.zip && unzip master.zip && rm master.zip
+RUN cd /usr/local/zed/ros2ws/src/zed-ros2-wrapper-master/ && wget https://github.com/stereolabs/zed-ros2-interfaces/archive/refs/heads/master.zip && unzip master.zip && rm master.zip
+
+# Se descarga colcon y rosdep, para compilar e instalar los paquetes de zed
+RUN apt install -y python3-colcon-common-extensions python3-rosdep
+ENV REP_VERSION master
+
+# Se descarga zed-ros2-examples. La variable REP_VERSION indica que rama o commit usar
+RUN cd /usr/local/zed/ros2ws/src && wget https://github.com/stereolabs/zed-ros2-examples/archive/${REP_VERSION}.zip && unzip ${REP_VERSION}.zip && rm ${REP_VERSION}.zip
+
+RUN rosdep init && rosdep update
+ENV ROS_DISTRO foxy
+
+# Se instalan los paquetes
+RUN cd ros2ws && rosdep install --from-paths src --ignore-src -r -y
+
+# Se alistan los scripts para que cuando se ejecute el contenedor de Docker encuentre ros activo
+RUN echo source /opt/ros/foxy/setup.bash >> ~/.bashrc
+RUN echo source /usr/local/zed/ros2ws/install/local_setup.sh >> ~/.bashrc
+
+# Se crea un script, run_zednode para correr el nodo de manera sencilla
+RUN echo "#!/bin/bash \n source ~/.bashrc \n source /usr/local/zed/ros2ws/install/local_setup.sh \n ros2 launch zed_wrapper zed2.launch.py" >> /usr/bin/run_zednode && chmod +x /usr/bin/run_zednode
+RUN apt install -y ros-foxy-image-transport*
+
+# Se crea un script compile.sh, para compilar los paquetes
+RUN echo 'source /opt/ros/foxy/setup.bash && source /root/.bashrc &&  cd /usr/local/zed/ros2ws/ && colcon build --symlink-install --cmake-args="-DCMAKE_BUILD_TYPE=Release -Wall -Wextra -Wpedantic " || colcon build --symlink-install --cmake-args="-DCMAKE_BUILD_TYPE=Release -Wall -Wextra -Wpedantic "' >> /usr/bin/compile.sh && chmod +x /usr/bin/compile.sh
+
+# Se modifica el ejemplo de rviz2 para no correr el nodo
+# en https://github.com/stereolabs/zed-ros2-examples/blob/master/zed_display_rviz2/launch/display_zed2i.launch.py#L18 esta esta variable
+RUN sed 's/start_zed_node = True/start_zed_node = False/g' /usr/local/zed/ros2ws/src/zed-ros2-examples-${REP_VERSION}/zed_display_rviz2/launch/display_zed2i.launch.py > /usr/local/zed/ros2ws/src/zed-ros2-examples-${REP_VERSION}/zed_display_rviz2/launch/display_zed2i.launch_new.py && mv /usr/local/zed/ros2ws/src/zed-ros2-examples-${REP_VERSION}/zed_display_rviz2/launch/display_zed2i.launch_new.py /usr/local/zed/ros2ws/src/zed-ros2-examples-${REP_VERSION}/zed_display_rviz2/launch/display_zed2i.launch.py
+
+WORKDIR /usr/local/zed/ros2ws
+SHELL ["/bin/bash", "-c"]
