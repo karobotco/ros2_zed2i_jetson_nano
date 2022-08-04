@@ -2,7 +2,7 @@
 ## Director de proyecto: Olmer García
 ### Presenta: Karolina Ladino Puerto
 
-------
+----------
 ## 🦊 Foxy en Docker - Desktop
 
 ### ⚒️ Construcción de la imagen de Docker (Linux Desktop)
@@ -85,6 +85,21 @@ source install/local_setup.bash
 ros2 launch zed_display_rviz2 display_zed2.launch.py
 ```
 -------------
+## 🦊 Foxy en Docker - Jetson Nano
+
+Para correr el nodo de ZED Foxy en Jetson nano se deben ejecutar los siguientes comandos:
+
+```bash
+docker run -it --net=host --privileged --gpus all --rm xdgfx/zed_ros2_node_testing
+```
+
+Una vez dentro del contenedor ejecutar:
+
+```bash
+ros2 launch zed_wrapper zed2.launch.py
+```
+
+---------
 
 ## 🐢 Eloquent en Docker - Jetson Nano
 
