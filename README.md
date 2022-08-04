@@ -10,7 +10,7 @@
 El Dockerfile se construye a partir de la imagen base de Stereolabs. 
 En [https://hub.docker.com/r/stereolabs/zed/](https://hub.docker.com/r/stereolabs/zed/) se pueden consultar todas las disponibles.
 
-[Dockerfile]()
+[Dockerfile](https://github.com/karobotco/ros2_zed2i_jetson_nano/blob/main/Dockerfile_foxy_dekstop)
 
 Para construir la imagen se debe ejecutar el siguiente comando en la carpeta donde se encuentre el Dockerfile:
 
@@ -32,6 +32,7 @@ docker run -it --net=host --privileged --gpus all -v $(pwd)/build/:/usr/local/ze
 Esto abrirá una consola dentro del contenedor.
 
 Dentro de ella ejecutar:
+
 ```bash
 compile.sh
 ```
@@ -46,13 +47,14 @@ El Dockerfile se construye a partir de la imagen base de Ubuntu 18.04 LTS de Ste
 
 En [https://hub.docker.com/r/stereolabs/zed/](https://hub.docker.com/r/stereolabs/zed/) se pueden consultar todas las disponibles.
 
-[Dockerfile]()
+[Dockerfile](https://github.com/karobotco/ros2_zed2i_jetson_nano/blob/main/Dockerfile_eloquent_desktop)
 
 ### 🏗️ Compilar los paquetes
 
 Actualmente los paquetes quedan compilados en la maquina host, aunque su compilación se ejecute dentro del contenedor.
 
 Para correr la compilación, dentro de la carpeta donde se desee dejar los compilados, ejecutar:
+
 ```bash
 docker run -it --net=host --privileged --gpus all -v $(pwd)/build/:/usr/local/zed/ros2ws/build -v $(pwd)/install/:/usr/local/zed/ros2ws/install karozedfoxy
 ```
@@ -60,6 +62,7 @@ docker run -it --net=host --privileged --gpus all -v $(pwd)/build/:/usr/local/ze
 Esto abrirá una consola dentro del contenedor.
 
 Dentro de ella ejecutar:
+
 ```bash
 compile.sh
 ```
@@ -67,6 +70,7 @@ compile.sh
 ⚠️ Si ya se ejecutó previamente y se instalaron paquetes diferentes, es posible que sea necesario reiniciar la compilación.
 
 Para correr el visualizador, ejecutar el contenedor con:
+
 ```bash
 docker run -it --net=host --privileged --gpus all \
         -v $(pwd)/build/:/usr/local/zed/ros2ws/build \
@@ -74,8 +78,9 @@ docker run -it --net=host --privileged --gpus all \
         -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix \
 jetsonkaro
 ```
-```bash
 Dentro del contenedor ejecutar:
+
+```bash
 source install/local_setup.bash
 ros2 launch zed_display_rviz2 display_zed2.launch.py
 ```
@@ -102,6 +107,7 @@ jetsonkaro
 ```
 
 Se ejecuta dentro del contenedor:
+
 ```bash
 run_zednode
 ```
@@ -115,6 +121,7 @@ run_zednode
 El nodo de ZED se ejecuta en la maquina a la que está conectada **físicamente** la cámara ZED, en este caso la Jetson Nano.
 
 Para ejecutarlo, ejecutar dentro del contenedor:
+
 ```bash
 run_zednode
 ```
