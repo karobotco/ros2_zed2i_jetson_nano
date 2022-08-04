@@ -1,0 +1,36 @@
+FROM stereolabs/zed:3.7-tools-devel-jetson-jp4.6.1
+
+# Instalar ROS Eloquent
+RUN apt update && apt install -y locales curl gnupg2 lsb-release && \
+    curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+ 
+RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu bionic main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+RUN apt update && apt install -y ros-eloquent-desktop ros-eloquent-ros-base python3-rosdep
+
+# Se descarga zed-ros2-wrapper
+RUN mkdir -p /usr/local/zed/ros2ws/src && cd /usr/local/zed/ros2ws/src && wget https://github.com/stereolabs/zed-ros2-wrapper/archive/refs/heads/eloquent.zip && unzip eloquent.zip && rm eloquent.zip
+
+# Se instala zed ros2 examples
+#RUN cd /usr/local/zed/ros2ws/src && wget https://github.com/stereolabs/zed-ros2-examples/archive/refs/heads/master.zip && unzip master.zip && rm master.zip
+
+RUN rosdep init && rosdep update  --include-eol-distros
+ENV ROS_DISTRO eloquent
+RUN cd ros2ws && rosdep install --from-paths src --ignore-src -r -y
+
+# Se instala Colcon para poder compilar los paquetes de zed
+RUN apt install -y python3-colcon-common-extensions
+
+# Actualizando CMAKE para poder compilar sin problemas
+RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - |  sudo tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+RUN sudo sh -c 'echo "deb https://apt.kitware.com/ubuntu/ bionic main" > /etc/apt/sources.list.d/cmake-latest.list'
+RUN apt update && apt upgrade -y cmake
+
+# Instalando una dependencia necesaria para conectarse a la camara por USB
+RUN apt install -y libusb-1.0-0-dev
+
+# Se crea un script, run_zednode para correr el nodo de manera sencilla
+RUN echo source /opt/ros/eloquent/setup.bash >> ~/.bashrc
+RUN echo "#!/bin/bash \n source ~/.bashrc \n source /usr/local/zed/ros2ws/install/local_setup.sh \n ros2 launch zed_wrapper zed2.launch.py" >> /usr/bin/run_zednode && chmod +x /usr/bin/run_zednode
+
+WORKDIR /usr/local/zed/ros2ws
+SHELL ["/bin/bash", "-c"]
